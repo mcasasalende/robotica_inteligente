@@ -79,10 +79,11 @@ def img_xyz(centroid, depth, camera_matrix):
     # 0  fy cy
     # 0  0  1 
 
-    fx = camera_matrix[0,0]
-    cx = camera_matrix[0,2]
-    fy = camera_matrix[1,1]
-    cy = camera_matrix[1,2]
+    print(camera_matrix)
+    fx = camera_matrix[0]
+    cx = camera_matrix[2]
+    fy = camera_matrix[4]
+    cy = camera_matrix[5]
 
     # TODO 
     # Calculate the x,y,z coordinates of the object given the intrinsic parameters of the camera (fx,fy,cx,cy) and 
@@ -131,8 +132,8 @@ def color_image_callback(color_image_msg):
     filtered_obj, centroide_obj, obt_detec  = filter_img_objects(color_image,lower_red,upper_red)
 
     # Publish the filtered image of the object
-    filtered_image_msg = 
-    filtered_obj_pub.
+    filtered_image_msg = bridge.cv2_to_imgmsg(filtered_obj, encoding="bgr8")
+    filtered_obj_pub.publish(filtered_image_msg)
 
 
 
@@ -157,10 +158,10 @@ def depth_image_callback(depth_image_msg):
     # Note: The depth image data must be converted from millimeters to meters.
 
     if (obt_detec):
-        depth_obj  = 
+        depth_obj  = depth_image[centroide_obj[1], centroide_obj[0]] / 1000.0
     
     if (robot_detec):
-        depth_blue = 
+        depth_blue = depth_image[centroide_blue[1], centroide_blue[0]] / 1000.0
 
 
 def camera_info_callback(camera_info_msg):
@@ -239,8 +240,8 @@ def ros_node():
     # The subscribers to obtain the depth image and the intrinsic parameters of the camera must be implemented.
     
     color_image_sub = rospy.Subscriber('/camera/color/image_raw', Image, color_image_callback)
-    depth_image_sub = # Corresponding callback:  depth_image_callback
-    camera_info_sub = # Corresponding callback:  camera_info_callback
+    depth_image_sub = rospy.Subscriber('/camera/depth/image_raw', Image, depth_image_callback)
+    camera_info_sub = rospy.Subscriber('/camera/color/camera_info', CameraInfo, camera_info_callback)
 
     # global variables
     global filtered_obj_pub, filtered_blue_pub,pose_array_pub
