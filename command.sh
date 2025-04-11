@@ -1,0 +1,1 @@
+docker run --shm-size=1g --privileged --ulimit memlock=-1 --ulimit stack=67108864 --rm -it --net=host -e DISPLAY=:1 --user=root -v /tmp/.X11-unix:/tmp/.X11-unix:rw -v /dev:/dev --name robotica_container --gpus all --cpuset-cpus=0-3 -v /home/alumno/robotica_inteligente/src/robotica_inteligente:/home/docker/catkin_ws/src/robotica_inteligente robotica-inteligente
