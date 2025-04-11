@@ -51,13 +51,13 @@ from math import pi, dist, cos, fabs
 from moveit_commander.conversions import pose_to_list
 
 #TODO Define the global position of the robot.
-ROBOT_POSITION = geometry_msgs.msg.Point(x=0, y=0, z=0) 
+ROBOT_POSITION = geometry_msgs.msg.Point(x=5, y=3, z=0) 
 #TODO Define joint positions of the arm (home position) and of the gripper (open and close)
 # They muss be in radians.
-HOME_JOINT_STATE = [0, 0, 0 , 0, 0, 0]
+HOME_JOINT_STATE = [-1.605, -1.892, -2.396 , -0.303, 1.603, -0.831]
 # The gripper has 9 joints and the positions muss be inside its limits.
-CLOSE_JOINT_STATE = []
-OPEN_JOINT_STATE = []
+CLOSE_JOINT_STATE = [0.554,0.418,-0.056,0.895,0.179,-0.052,0.591,0.293,-0.052]
+OPEN_JOINT_STATE = [0.050,0.000,-0.300,0.050,0.104,-0.052,0.050,0.089,-0.186]
 
 class MoveUR5Node(object):
 
@@ -87,6 +87,8 @@ class MoveUR5Node(object):
         self.box_name = ""
         self.object_position=geometry_msgs.msg.Point()
 
+        print(f'Robot state: {self.robot.get_current_state()}')
+
         #Remove all the objects in the scene, if there are.
         self.scene.remove_attached_object(self.move_arm.get_end_effector_link())
         self.scene.remove_world_object()
@@ -108,6 +110,8 @@ class MoveUR5Node(object):
         if object_position.z<0: return
 
         self.object_position=object_position
+
+        # print(f'object position: {object_position.x}, {object_position.y}, {object_position.z}')
     
 
     def go_to_joint_arm_state(self, joint_goal):
@@ -208,6 +212,7 @@ class MoveUR5Node(object):
         rate = rospy.Rate(10)
         while not rospy.is_shutdown():
             #TODO call the functions to perform the task.
+            
             
             rate.sleep()
 
