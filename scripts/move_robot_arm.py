@@ -57,7 +57,7 @@ ROBOT_POSITION = geometry_msgs.msg.Point(x=5, y=3, z=0)
 HOME_JOINT_STATE = [-1.605, -1.892, -2.396 , -0.303, 1.603, -0.831]
 # The gripper has 9 joints and the positions muss be inside its limits.
 CLOSE_JOINT_STATE = [0.554,0.418,-0.056,0.895,0.179,-0.052,0.591,0.293,-0.052]
-OPEN_JOINT_STATE = [0.050,0.000,-0.300,0.050,0.104,-0.052,0.050,0.089,-0.186]
+OPEN_JOINT_STATE = [0.111,0.082,-0.053,0.163,0.135,-0.053,0.160,0.01,0.089,-0.318]
 
 class MoveUR5Node(object):
 
@@ -87,7 +87,7 @@ class MoveUR5Node(object):
         self.box_name = ""
         self.object_position=geometry_msgs.msg.Point()
 
-        print(f'Robot state: {self.robot.get_current_state()}')
+        # print(f'Robot state: {self.robot.get_current_state()}')
 
         #Remove all the objects in the scene, if there are.
         self.scene.remove_attached_object(self.move_arm.get_end_effector_link())
@@ -99,6 +99,7 @@ class MoveUR5Node(object):
         #TODO Consider additional subscribers and publishers for the communication between both robots.
 
         ## Publishers definition
+        self.grasp_publisher = rospy.Publisher("/ur5_grasp", std_msgs.msg.Bool, queue_size=1)
 
         # Subscribers definition
         self.position_subscriber = rospy.Subscriber("/pose_array",
@@ -206,13 +207,43 @@ class MoveUR5Node(object):
 
     # TODO Define the functions to perform the task of grap the object and leave it in the mobile robot.
     # Consider the use of a state machine to coordinate the process.
-    
+    def grasp_object(self):
+
+        try:
+            # 1. Create approach pose (10cm above object)
+            approach_pose = geometry_msgs.msg.Pose()
+            approach_pose.position.x = self.object_position.x
+            approach_pose.position.y = self.object_position.y
+            approach_pose.position.z = self.object_position.z + 0.1
+            approach_pose.orientation = self.move_arm.get_current_pose().pose.orientation
+
+            # 2. Move to approach position
+            if not self.go_to_pose_arm_goal(approach_pose):
+                rospy.logwarn("Approach failed")
+                return False
+            
+            # 3. Close gripper (using your predefined joint values)
+            self.go_to_joint_gripper_state(CLOSE_JOINT_STATE)
+            self.attach_object()  # Attach for collision checking
+
+            # 4. Lift object (20cm up)
+            lift_pose = copy.deepcopy(approach_pose)
+            lift_pose.position.z += 0.2
+            return self.go_to_pose_arm_goal(lift_pose)
+        
+        except Exception as e:
+            rospy.logerr(f"Grasp failed: {str(e)}")
+            return False
     def run(self):
         #Control loop
         rate = rospy.Rate(10)
         while not rospy.is_shutdown():
             #TODO call the functions to perform the task.
-            
+            if hasattr(self, 'object_position') and self.object_position.z >= 0:
+                if self.grasp_object():
+                    self.grasp_publisher.publish(True)
+                else:
+                    self.grasp_publisher.publish(False)
             
             rate.sleep()
 
