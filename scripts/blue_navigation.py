@@ -50,15 +50,17 @@ class BlueTrajectoryPlanner(object):
 
         #TODO Target position initialization. It is possible to consider several target points to maneuver and approach the UR5 robot.
         self.goal = geometry_msgs.msg.Point()
-        self.goal.x, self.goal.y = 0.0, 0.0
+        self.goal.x, self.goal.y = 4.5, 2.5
         # Local path initialization (4 points) to avoid errors until the first point is calculated.
         self.local_path=[self.goal for i in range(4)]
         print("Goal x: {}, y: {}".format(self.goal.x, self.goal.y))
 
         # TODO consider more subscribers/publishers if needed
         # Subscribers definition
-        self.position_subscriber = rospy.Subscriber("/blue/ground_truth",
-            Odometry, self.position_callback, queue_size=1)
+        # self.position_subscriber = rospy.Subscriber("/blue/ground_truth",
+        #     Odometry, self.position_callback, queue_size=1)
+        self.position_subscriber = rospy.Subscriber("/pose_array",
+            geometry_msgs.msg.PoseArray, self.position_callback, queue_size=1)
         self.obstacles_subscriber = rospy.Subscriber("/obstacles",
             sensor_msgs.msg.PointCloud2, self.obstacles_callback, queue_size=1)
         self.obstacles_subscriber = rospy.Subscriber("/free_zone",
@@ -80,9 +82,16 @@ class BlueTrajectoryPlanner(object):
         
     #Callbacks
     #TODO modify this callback to not depend on the position given by Gazebo.
-    def position_callback(self, ground_truth:Odometry):
-        self.position=ground_truth.pose.pose.position
-        euler = tf_conversions.transformations.euler_from_quaternion(ground_truth.pose.pose.orientation)
+    # def position_callback(self, ground_truth:Odometry):
+    #     self.position=ground_truth.pose.pose.position
+    #     euler = tf_conversions.transformations.euler_from_quaternion(ground_truth.pose.pose.orientation)
+    #     self.theta=euler[2]
+    def position_callback(self, pose_array:geometry_msgs.msg.PoseArray):
+        self.position=pose_array.poses[1].position
+        # print(pose_array.poses[1].orientation)
+        q = pose_array.poses[1].orientation
+        quat = [q.x, q.y, q.z, q.w]
+        euler = tf_conversions.transformations.euler_from_quaternion(quat)
         self.theta=euler[2]
 
     def obstacles_callback(self, obstacles:sensor_msgs.msg.PointCloud2):
@@ -146,6 +155,7 @@ class BlueTrajectoryPlanner(object):
             force = force_r - force_a
 
             if force < min_force:
+                print("Calculating local path point")
                 min_force=force
                 local_goal=limit_point
         self.local_path.append(local_goal)
@@ -243,18 +253,25 @@ class BlueTrajectoryPlanner(object):
             # Check forwards and backwards movement.
             directions = [-speed2, speed2]
             for dir in directions:
+                # print(f"EVALUATING DIRECTION {dir}")
                 flag_collision_risk = False
 
                 #TODO Calculate turn radius and velocity using the robot kinematics.
-
+                R = float('inf') if abs(steer) <0.001 else VEHICLE_LENGHT/tan(steer)
+                omega = 0.0 if R == float('inf') else dir/R
                 # Calculate the trajectory using the angle rotation. Several points are sampled from the trajectory over time, 
                 # therefore the sample variable is equivalent to the t variable in the robot kinematic equation.
                 for sample in np.arange(self.delta_sample, self.max_sample+0.01, self.delta_sample):
                     local_point=geometry_msgs.msg.Point()
+                    
                     #TODO calculate trajectory points using the robot kinematics.
-                
+                    local_point.x = dir * cos(omega * sample) * sample
+                    local_point.y = dir * sin(omega * sample) * sample
+                    # print(f'LOCAL POINT: {local_point.x}, {local_point.y}') 
                     #TODO Detect collisions risk.
                     for obstacle in self.obstacles:
+                        if self.distance(local_point, obstacle) < VEHICLE_LENGHT:
+                            flag_collision_risk = True
                         pass
                     
                     if flag_collision_risk: break
@@ -262,8 +279,21 @@ class BlueTrajectoryPlanner(object):
                 # If there is no collision, evaluate the trajectory.
                 if not flag_collision_risk:
                     #TODO estimate the trajectory evaluation in terms of the distance and orientation error to the local target (self.local_path[-2]).
-                    error = 0
+                    target = self.local_path[2]
+                    error_dist = self.distance(local_point, target)
+                    print(f'error dist {error_dist}')
+                    angle_to_target = self.angle(target, local_point)
+                    final_theta = omega * self.delta_angle
+                    angle_to_target = self.angle(target,local_point)
+
+                    angle_error = abs(angle_to_target - final_theta)
+                    error = error_dist 
+
+                    
                     if error < min_error:
+                        print(f'distance error = {error_dist}')
+                        print(f'Angle to target = {angle_to_target}')
+                        print(f'error = {error}')
                         min_error=error
                         ackermann_control.steering_angle=steer
                         ackermann_control.speed=dir

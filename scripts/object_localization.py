@@ -79,7 +79,7 @@ def img_xyz(centroid, depth, camera_matrix):
     # 0  fy cy
     # 0  0  1 
 
-    print(camera_matrix)
+    # print(camera_matrix)
     fx = camera_matrix[0]
     cx = camera_matrix[2]
     fy = camera_matrix[4]
@@ -223,6 +223,7 @@ def camera_info_callback(camera_info_msg):
     pose_array_msg.poses.append(pose_blue)
 
     # Publish the PoseArray message
+    # print("Publishing PoseArray:", pose_array_msg)
     pose_array_pub.publish(pose_array_msg)
 
    

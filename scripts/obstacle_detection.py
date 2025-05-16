@@ -23,8 +23,8 @@ pub_freezone  = None
 # Note: Consider the LiDAR sensor is mounted on the robot at a certain height. The points below the sensor 
 # have a negative value
 
-altura = 
-radio = 
+altura = -0.4
+radio = 3.5
 
 def filter_obstacles_function(point_cloud_in, altura):
 
@@ -49,10 +49,10 @@ def filter_obstacles_function(point_cloud_in, altura):
         # Note: The points added to "obstacle_points" are projected to the "altura" value, that is to say,
         # the obstacle coordinates (x,y,z) will change to (x,y,altura)
 
-        if # height condition compared to Z
+        if z > altura: # height condition compared to Z
             
             # Add the point to the detected obstacles:
-            obstacles_points.append([])
+            obstacles_points.append([x,y,z])
 
     return obstacles_points
 
@@ -75,19 +75,19 @@ def free_zone_function(point_cloud_in, radio,altura):
         
         #TODO
         # Check if the point is within the radius given the x,y distance
-        if 
+        if np.sqrt(x**2 + y**2) <= radio:
 
             # To create the radius of free obstacles, we need to know the angle of each point given its x,y coordinate.
         
             # Calculate the angle given its x,y coordinates (arcotangente)
-            ang =
+            ang = np.arctan2(y,x)
 
             # Calculate the new x,y coordinates given the angle and the radius
-            new_x =
-            new_y =
+            new_x = radio * np.cos(ang)
+            new_y = radio * np.sin(ang)
             
             # Add point to the ring with z value equal to the height
-            free_zone.append([])
+            free_zone.append([new_x, new_y, z])
 
 
     return free_zone
@@ -122,6 +122,8 @@ def point_cloud_callback(msg):
 
     # Point cloud of detected objects created by the "filter_obstacles_function" function.
     obstacles_points = filter_obstacles_function(msg, altura)
+
+    # print(obstacles_points)
 
     # Point cloud of free obstacles created by the "free_zone_function" function.
     free_zone_points = free_zone_function(msg, radio,altura)

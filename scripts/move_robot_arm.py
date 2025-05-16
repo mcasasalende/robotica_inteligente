@@ -51,13 +51,13 @@ from math import pi, dist, cos, fabs
 from moveit_commander.conversions import pose_to_list
 
 #TODO Define the global position of the robot.
-ROBOT_POSITION = geometry_msgs.msg.Point(x=5, y=3, z=0) 
+ROBOT_POSITION = geometry_msgs.msg.Point(x=4.9, y=2.9, z=0) 
 #TODO Define joint positions of the arm (home position) and of the gripper (open and close)
 # They muss be in radians.
-HOME_JOINT_STATE = [-1.605, -1.892, -2.396 , -0.303, 1.603, -0.831]
+HOME_JOINT_STATE = [-1.603, -1.312, -1.988 , -1.432, 1.511, -2.466]
 # The gripper has 9 joints and the positions muss be inside its limits.
-CLOSE_JOINT_STATE = [0.554,0.418,-0.056,0.895,0.179,-0.052,0.591,0.293,-0.052]
-OPEN_JOINT_STATE = [0.111,0.082,-0.053,0.163,0.135,-0.053,0.160,0.01,0.089,-0.318]
+CLOSE_JOINT_STATE = [0.506 , 0.497, -0.053, 0.669, 0.547, -0.053, 0.632, 0.0134,-0.053]
+OPEN_JOINT_STATE = [0.120 , 0.070, -0.411, 0.098, 0.045, -0.415, 0.079, 0.055,-0.234]
 
 class MoveUR5Node(object):
 
@@ -87,7 +87,7 @@ class MoveUR5Node(object):
         self.box_name = ""
         self.object_position=geometry_msgs.msg.Point()
 
-        # print(f'Robot state: {self.robot.get_current_state()}')
+
 
         #Remove all the objects in the scene, if there are.
         self.scene.remove_attached_object(self.move_arm.get_end_effector_link())
@@ -96,14 +96,16 @@ class MoveUR5Node(object):
         self.go_to_joint_gripper_state(OPEN_JOINT_STATE)
         self.go_to_joint_arm_state(HOME_JOINT_STATE)
 
+        # print(f'Robot state: {self.robot.get_current_state()}')
         #TODO Consider additional subscribers and publishers for the communication between both robots.
 
         ## Publishers definition
-        self.grasp_publisher = rospy.Publisher("/ur5_grasp", std_msgs.msg.Bool, queue_size=1)
+        # self.grasp_publisher = rospy.Publisher("/ur5_grasp", std_msgs.msg.Bool, queue_size=1)
 
         # Subscribers definition
         self.position_subscriber = rospy.Subscriber("/pose_array",
             geometry_msgs.msg.PoseArray, self.detection_callback, queue_size=1)
+        
         
     def detection_callback(self, pose_array:geometry_msgs.msg.PoseArray):
         # Check if the object has been detected. It is communicated through the position in z.
@@ -111,8 +113,6 @@ class MoveUR5Node(object):
         if object_position.z<0: return
 
         self.object_position=object_position
-
-        # print(f'object position: {object_position.x}, {object_position.y}, {object_position.z}')
     
 
     def go_to_joint_arm_state(self, joint_goal):
@@ -135,6 +135,9 @@ class MoveUR5Node(object):
 
         # Check if the robot has reached the target.
         current_joints = self.move_arm.get_current_joint_values()
+        print("Joint goal reached")
+        print(current_joints)
+
         return all_close(joint_goal, current_joints, 0.015)
     
     def go_to_joint_gripper_state(self, joint_goal):
@@ -208,25 +211,34 @@ class MoveUR5Node(object):
     # TODO Define the functions to perform the task of grap the object and leave it in the mobile robot.
     # Consider the use of a state machine to coordinate the process.
     def grasp_object(self):
-
         try:
             # 1. Create approach pose (10cm above object)
             approach_pose = geometry_msgs.msg.Pose()
-            approach_pose.position.x = self.object_position.x
-            approach_pose.position.y = self.object_position.y
-            approach_pose.position.z = self.object_position.z + 0.1
+            print(ROBOT_POSITION)
+            print('-----------------------')
+            print(self.object_position)
+            approach_pose.position.x = self.object_position.y - ROBOT_POSITION.y
+            approach_pose.position.y = ROBOT_POSITION.x - self.object_position.x 
+            approach_pose.position.z = 0.5
             approach_pose.orientation = self.move_arm.get_current_pose().pose.orientation
+            print(approach_pose)
 
             # 2. Move to approach position
             if not self.go_to_pose_arm_goal(approach_pose):
                 rospy.logwarn("Approach failed")
                 return False
             
-            # 3. Close gripper (using your predefined joint values)
+            # 3. turn down the arm 
+            approach_pose.position.z = 0.3
+            if not self.go_to_pose_arm_goal(approach_pose):
+                rospy.logwarn("Approach failed")
+                return False
+            
+            # 4. Close gripper (using your predefined joint values)
             self.go_to_joint_gripper_state(CLOSE_JOINT_STATE)
             self.attach_object()  # Attach for collision checking
 
-            # 4. Lift object (20cm up)
+            # 5. Lift object (20cm up)
             lift_pose = copy.deepcopy(approach_pose)
             lift_pose.position.z += 0.2
             return self.go_to_pose_arm_goal(lift_pose)
@@ -234,17 +246,27 @@ class MoveUR5Node(object):
         except Exception as e:
             rospy.logerr(f"Grasp failed: {str(e)}")
             return False
+        
     def run(self):
+        # State flags
+        detected = False
+        picked = False
+
         #Control loop
         rate = rospy.Rate(10)
         while not rospy.is_shutdown():
             #TODO call the functions to perform the task.
-            if hasattr(self, 'object_position') and self.object_position.z >= 0:
-                if self.grasp_object():
-                    self.grasp_publisher.publish(True)
-                else:
-                    self.grasp_publisher.publish(False)
-            
+            if not detected and self.object_position.z > 0:
+                print("Object detected.")
+                self.add_object(self.object_position)
+                detected = True
+            elif detected and not picked:
+                print("Picking up object...")
+                # Move above the object
+                print("Aproaching")
+                picked = self.grasp_object()
+            # print(f'detected = {detected}\n, picked = {picked}')
+            # print(self.object_position)
             rate.sleep()
 
     
